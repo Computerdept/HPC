@@ -1,91 +1,121 @@
 #include <iostream>
 #include <omp.h>
+#include <cstdlib>
+#include <ctime>
 
-void merge(int arr[], int l, int m, int r) {
-    int n1 = m - l + 1;
-    int n2 = r - m;
-    int L[n1], R[n2];
+using namespace std;
 
-    // Copy data to temp arrays L[] and R[]
-    for (int i = 0; i < n1; i++)
-        L[i] = arr[l + i];
-    for (int j = 0; j < n2; j++)
-        R[j] = arr[m + 1 + j];
+// Function to merge two sorted subarrays into one sorted array
+void merge(int arr[], int left, int mid, int right) {
+    int n1 = mid - left + 1;
+    int n2 = right - mid;
 
-    // Merge the temp arrays back into arr[l..r]
-    int i = 0; // Initial index of first subarray
-    int j = 0; // Initial index of second subarray
-    int k = l; // Initial index of merged subarray
+    // Create temporary arrays
+    int* L = new int[n1];
+    int* R = new int[n2];
+
+    // Copy data to temporary arrays L[] and R[]
+    for (int i = 0; i < n1; ++i)
+        L[i] = arr[left + i];
+    for (int j = 0; j < n2; ++j)
+        R[j] = arr[mid + 1 + j];
+
+    // Merge the temporary arrays back into arr[left..right]
+    int i = 0, j = 0, k = left;
     while (i < n1 && j < n2) {
         if (L[i] <= R[j]) {
             arr[k] = L[i];
-            i++;
-        }
-        else {
+            ++i;
+        } else {
             arr[k] = R[j];
-            j++;
+            ++j;
         }
-        k++;
+        ++k;
     }
 
-    // Copy the remaining elements of L[], if there are any
+    // Copy the remaining elements of L[], if any
     while (i < n1) {
         arr[k] = L[i];
-        i++;
-        k++;
+        ++i;
+        ++k;
     }
 
-    // Copy the remaining elements of R[], if there are any
+    // Copy the remaining elements of R[], if any
     while (j < n2) {
         arr[k] = R[j];
-        j++;
-        k++;
+        ++j;
+        ++k;
+    }
+
+    delete[] L;
+    delete[] R;
+}
+
+// Function to perform sequential merge sort
+void sequentialMergeSort(int arr[], int left, int right) {
+    if (left < right) {
+        int mid = left + (right - left) / 2;
+
+        // Sort first and second halves
+        sequentialMergeSort(arr, left, mid);
+        sequentialMergeSort(arr, mid + 1, right);
+
+        // Merge the sorted halves
+        merge(arr, left, mid, right);
     }
 }
 
-void mergeSort(int arr[], int l, int r) {
-    if (l < r) {
-        int m = l + (r - l) / 2;
-        // Parallelize the calls to mergeSort
-        #pragma omp task
-        mergeSort(arr, l, m);
-        #pragma omp task
-        mergeSort(arr, m + 1, r);
-        #pragma omp taskwait
-        merge(arr, l, m, r);
+// Function to perform parallel merge sort
+void parallelMergeSort(int arr[], int left, int right) {
+    if (left < right) {
+        int mid = left + (right - left) / 2;
+
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            parallelMergeSort(arr, left, mid);
+
+            #pragma omp section
+            parallelMergeSort(arr, mid + 1, right);
+        }
+
+        // Merge the sorted halves
+        merge(arr, left, mid, right);
     }
+    
 }
 
 int main() {
     int n;
-    std::cout << "Enter the number of elements: ";
-    std::cin >> n;
+    cout << "Enter the size of the array: ";
+    cin >> n;
 
+    // Generate random input data
     int* arr = new int[n];
-    std::cout << "Enter " << n << " elements: ";
-    for (int i = 0; i < n; i++)
-        std::cin >> arr[i];
+    srand(time(NULL)); // Seed the random number generator
+    for (int i = 0; i < n; ++i)
+        arr[i] = rand() % 1000; // Generate random numbers between 0 and 999
 
-    std::cout << "Given array is: ";
-    for (int i = 0; i < n; i++)
-        std::cout << arr[i] << " ";
-    std::cout << std::endl;
+    // Sequential merge sort
+    clock_t start = clock();
+    sequentialMergeSort(arr, 0, n - 1);
+    clock_t stop = clock();
+    double sequential_duration = double(stop - start) / CLOCKS_PER_SEC * 1000;
 
-    double start = omp_get_wtime();
-    // Parallelize the initial call to mergeSort
-    #pragma omp parallel
-    {
-        #pragma omp single nowait
-        mergeSort(arr, 0, n - 1);
-    }
-    double stop = omp_get_wtime();
+    cout << "Time taken for sequential merge sort: " << sequential_duration << " milliseconds" << endl;
+	
+    // Generate new random input data
+    srand(time(NULL)); // Reseed the random number generator
+    for (int i = 0; i < n; ++i)
+        arr[i] = rand() % 1000; // Generate random numbers between 0 and 999
 
-    std::cout << "Sorted array is: ";
-    for (int i = 0; i < n; i++)
-        std::cout << arr[i] << " ";
-    std::cout << std::endl;
+    // Parallel merge sort
+    start = clock();
+    parallelMergeSort(arr, 0, n - 1);
+    stop = clock();
+    double parallel_duration = double(stop - start) / CLOCKS_PER_SEC * 1000;
 
-    std::cout << "Time taken: " << stop - start << " seconds" << std::endl;
+    cout << "Time taken for parallel merge sort: " << parallel_duration << " milliseconds" << endl;
 
     delete[] arr;
 
